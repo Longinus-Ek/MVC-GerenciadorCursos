@@ -1,33 +1,46 @@
-<?php 
+<?php
 
 namespace Alura\Cursos\Controller;
 
 use Alura\Cursos\Entity\Curso;
-use Alura\Cursos\Trait\FlashMessageTrait;
-use Alura\Cursos\Infra\EntityManagerCreator;
-use Alura\Cursos\Controller\InterfaceControladorRequisicao;
+use Alura\Cursos\Helper\FlashMessageTrait;
+use Doctrine\ORM\EntityManagerInterface;
+use Nyholm\Psr7\Response;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 
-class Persistencia implements InterfaceControladorRequisicao
+class Persistencia implements RequestHandlerInterface
 {
     use FlashMessageTrait;
 
+    /**
+     * @var \Doctrine\ORM\EntityManagerInterface
+     */
     private $entityManager;
 
-    public function __construct()
+    public function __construct(EntityManagerInterface $entityManager)
     {
-        $this->entityManager = (new EntityManagerCreator())->getEntityManager();
+        $this->entityManager = $entityManager;
     }
-    public function processaRequisicao(): void
+
+    public function handle(ServerRequestInterface $request): ResponseInterface
     {
-        $descricao = htmlspecialchars($_POST['descricao'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8', true);
+        $descricao = filter_var(
+            $request->getParsedBody()['descricao'],
+            FILTER_SANITIZE_STRING
+        );
 
         $curso = new Curso();
         $curso->setDescricao($descricao);
 
-        $id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+        $id = filter_var(
+            $request->getQueryParams()['id'],
+            FILTER_VALIDATE_INT
+        );
 
         $tipo = 'success';
-        if(!is_null($id) && $id !== false){
+        if (!is_null($id) && $id !== false) {
             $curso->setId($id);
             $this->entityManager->merge($curso);
             $this->defineMensagem($tipo, 'Curso atualizado com sucesso');
@@ -35,8 +48,9 @@ class Persistencia implements InterfaceControladorRequisicao
             $this->entityManager->persist($curso);
             $this->defineMensagem($tipo, 'Curso inserido com sucesso');
         }
+
         $this->entityManager->flush();
 
-        header('Location: /listar-cursos', true, 302);
+        return new Response(302, ['Location' => '/listar-cursos']);
     }
 }
